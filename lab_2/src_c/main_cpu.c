@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <math.h>
+#include <string.h>
 
 void chk_args(int argc, char **argv){
     if(argc <= 2){
@@ -77,11 +79,11 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
 float *intercalar(const float *arr, long M, long N, long x){
     float *final_img = calloc(M * N, sizeof(float));
 
-    for(long amount = 0; amount < N/x; ++amount){
+    for(long amount = 0; amount < N/x/2; ++amount){
         for(long j = 0; j < M; ++j){
             for(long i = 0; i < x; ++i){
-                final_img[amount*i + N*j] = arr[amount*i+x + N*j];
-                final_img[amount*i+x + N*j] = arr[amount*i + N*j];
+                final_img[amount*(2*x) + i + N*j] = arr[amount*(2*x) + i + x + N*j];
+                final_img[amount*(2*x) + i + x + N*j] = arr[amount*(2*x) + i + N*j];
             }
         }
     }
@@ -95,18 +97,27 @@ int main(int argc, char **argv){
     long M, N;
     load_file(argv[1], &r_arr, &g_arr, &b_arr, &M, &N);
 
-    clock_t t = clock();
-    long x = 64;
-    float *new_r_arr = intercalar(r_arr, M, N, x);
-    float *new_g_arr = intercalar(g_arr, M, N, x);
-    float *new_b_arr = intercalar(b_arr, M, N, x);
-    t = clock() - t;
-    printf ("%f[ms].\n",((float)t)/CLOCKS_PER_SEC * 1000); /* http://www.cplusplus.com/reference/ctime/clock/ */
+    char *dst_name = malloc(strlen(argv[2]) + 3);
+    strcpy(&dst_name[2], argv[2]);
+    dst_name[1] = '_';
 
-    write_file(argv[2], M, N, new_r_arr, new_g_arr, new_b_arr);
+    for(long x = 0; x < 10; ++x){
+        dst_name[0] = x + '0';
+        clock_t t = clock();
+        float *new_r_arr = intercalar(r_arr, M, N, pow(2, x));
+        float *new_g_arr = intercalar(g_arr, M, N, pow(2, x));
+        float *new_b_arr = intercalar(b_arr, M, N, pow(2, x));
+        t = clock() - t;
+        printf ("%f[ms].\n",((float)t)/CLOCKS_PER_SEC * 1000); /* http://www.cplusplus.com/reference/ctime/clock/ */
 
-    free(new_r_arr);
-    free(new_g_arr);
-    free(new_b_arr);
+        write_file(dst_name, M, N, new_r_arr, new_g_arr, new_b_arr);
+
+        free(new_r_arr);
+        free(new_g_arr);
+        free(new_b_arr);
+    }
+
+    free(dst_name);
+
     return 0;
 }
