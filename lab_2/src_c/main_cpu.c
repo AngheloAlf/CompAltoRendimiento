@@ -79,12 +79,10 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
 float *intercalar(const float *arr, long M, long N, long x){
     float *final_img = calloc(M * N, sizeof(float));
 
-    for(long amount = 0; amount < N/x/2; ++amount){
-        for(long j = 0; j < M; ++j){
-            for(long i = 0; i < x; ++i){
-                final_img[amount*(2*x) + i + N*j] = arr[amount*(2*x) + i + x + N*j];
-                final_img[amount*(2*x) + i + x + N*j] = arr[amount*(2*x) + i + N*j];
-            }
+    for(long amount = 0; amount < N/x/2*M; ++amount){
+        for(long i = 0; i < x; ++i){
+            final_img[amount*(2*x) + i] = arr[amount*(2*x) + i + x];
+            final_img[amount*(2*x) + i + x] = arr[amount*(2*x) + i];
         }
     }
 

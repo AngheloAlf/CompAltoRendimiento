@@ -75,19 +75,17 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
 
 __global__ void intercalar(float *dst_arr, float *src_arr, long M, long N, long x){
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
-    if(tId < N/x/2){
-        for(long j = 0; j < M; ++j){
-            for(long i = 0; i < x; ++i){
-                dst_arr[tId*(2*x) + i + N*j] = src_arr[tId*(2*x) + i + x + N*j];
-                dst_arr[tId*(2*x) + i + x + N*j] = src_arr[tId*(2*x) + i + N*j];
-            }
+    if(tId < N/x/2*M){
+        for(long i = 0; i < x; ++i){
+            dst_arr[tId*(2*x) + i] = src_arr[tId*(2*x) + i + x];
+            dst_arr[tId*(2*x) + i + x] = src_arr[tId*(2*x) + i];
         }
     }
 }
 
 void generar_imagen(char *out_name, float *dst_r_arr, float *dst_g_arr, float *dst_b_arr, float *r_arr_gpu, float *g_arr_gpu, float *b_arr_gpu, long M, long N, long x){
     long block_size = 256;
-    long grid_size = (long)ceil((float)N/x/2/block_size);
+    long grid_size = (long)ceil((float)N/x/2*M/block_size);
 
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
