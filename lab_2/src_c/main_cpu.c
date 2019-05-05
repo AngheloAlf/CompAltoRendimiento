@@ -106,7 +106,7 @@ int main(int argc, char **argv){
         float *new_g_arr = intercalar(g_arr, M, N, pow(2, x));
         float *new_b_arr = intercalar(b_arr, M, N, pow(2, x));
         t = clock() - t;
-        printf ("%f[ms].\n",((float)t)/CLOCKS_PER_SEC * 1000); /* http://www.cplusplus.com/reference/ctime/clock/ */
+        printf ("%f[ms]\n",((float)t)/CLOCKS_PER_SEC * 1000); /* http://www.cplusplus.com/reference/ctime/clock/ */
 
         write_file(dst_name, M, N, new_r_arr, new_g_arr, new_b_arr);
 
