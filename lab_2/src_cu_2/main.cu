@@ -73,17 +73,18 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
     fclose(out_file);
 }
 
-__global__ void intercalar(float *dst_arr, float *src_arr, long M, long N, long x){
+__global__ void intercalar(float *src_arr, long M, long N, long x){
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if(tId < N/x/2*M){
         for(long i = 0; i < x; ++i){
-            dst_arr[tId*(2*x) + i] = src_arr[tId*(2*x) + i + x];
-            dst_arr[tId*(2*x) + i + x] = src_arr[tId*(2*x) + i];
+            float temp = src_arr[tId*(2*x) + i];
+            src_arr[tId*(2*x) + i] = src_arr[tId*(2*x) + i + x];
+            src_arr[tId*(2*x) + i + x] = temp;
         }
     }
 }
 
-void generar_imagen(char *out_name, float *dst_r_arr, float *dst_g_arr, float *dst_b_arr, float *r_arr_gpu, float *g_arr_gpu, float *b_arr_gpu, long M, long N, long x){
+void generar_imagen(char *out_name, float *r_arr_gpu, float *g_arr_gpu, float *b_arr_gpu, long M, long N, long x){
     long block_size = 256;
     long grid_size = (long)ceil((float)N/x/2*M/block_size);
 
@@ -92,9 +93,9 @@ void generar_imagen(char *out_name, float *dst_r_arr, float *dst_g_arr, float *d
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
-    intercalar<<<grid_size, block_size>>>(dst_r_arr, r_arr_gpu, M, N, x);
-    intercalar<<<grid_size, block_size>>>(dst_g_arr, g_arr_gpu, M, N, x);
-    intercalar<<<grid_size, block_size>>>(dst_b_arr, b_arr_gpu, M, N, x);
+    intercalar<<<grid_size, block_size>>>(r_arr_gpu, M, N, x);
+    intercalar<<<grid_size, block_size>>>(g_arr_gpu, M, N, x);
+    intercalar<<<grid_size, block_size>>>(b_arr_gpu, M, N, x);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     float milliseconds = 0;
@@ -104,9 +105,9 @@ void generar_imagen(char *out_name, float *dst_r_arr, float *dst_g_arr, float *d
     float *new_r_arr = (float *)malloc(M*N * sizeof(float));
     float *new_g_arr = (float *)malloc(M*N * sizeof(float));
     float *new_b_arr = (float *)malloc(M*N * sizeof(float));
-    cudaMemcpy(new_r_arr, dst_r_arr, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
-    cudaMemcpy(new_g_arr, dst_g_arr, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
-    cudaMemcpy(new_b_arr, dst_b_arr, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
+    cudaMemcpy(new_r_arr, r_arr_gpu, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
+    cudaMemcpy(new_g_arr, g_arr_gpu, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
+    cudaMemcpy(new_b_arr, b_arr_gpu, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
 
     write_file(out_name, M, N, new_r_arr, new_g_arr, new_b_arr);
 
@@ -133,21 +134,7 @@ int main(int argc, char **argv){
     cudaMemcpy(r_arr_gpu, r_arr, M*N * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(g_arr_gpu, g_arr, M*N * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(b_arr_gpu, b_arr, M*N * sizeof(float), cudaMemcpyHostToDevice);
-    
 
-    float *dst_r_arr;
-    float *dst_g_arr;
-    float *dst_b_arr;
-    
-    cudaMalloc(&dst_r_arr, M*N * sizeof(float));
-    cudaMemset(dst_r_arr, 0, M*N * sizeof(float));
-    
-    cudaMalloc(&dst_g_arr, M*N * sizeof(float));
-    cudaMemset(dst_g_arr, 0, M*N * sizeof(float));
-    
-    cudaMalloc(&dst_b_arr, M*N * sizeof(float));
-    cudaMemset(dst_b_arr, 0, M*N * sizeof(float));
-    
     /* CUDA SETUP END */
 
     char *dst_name = (char *)malloc(strlen(argv[2]) + 3);
@@ -158,7 +145,7 @@ int main(int argc, char **argv){
         dst_name[0] = i + '0';
         long x = i == 0 ? 1 : 2 << (i-1);
 
-        generar_imagen(dst_name, dst_r_arr, dst_g_arr, dst_b_arr, r_arr_gpu, g_arr_gpu, b_arr_gpu, M, N, x);
+        generar_imagen(dst_name, r_arr_gpu, g_arr_gpu, b_arr_gpu, M, N, x);
     }
     
     free(dst_name);
@@ -166,10 +153,6 @@ int main(int argc, char **argv){
     cudaFree(r_arr_gpu);
     cudaFree(g_arr_gpu);
     cudaFree(b_arr_gpu);
-
-    cudaFree(dst_r_arr);
-    cudaFree(dst_g_arr);
-    cudaFree(dst_b_arr);
 
     return 0;
 }
