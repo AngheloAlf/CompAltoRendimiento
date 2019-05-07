@@ -22,6 +22,15 @@ void load_row(FILE *img, float *arr, long M, long N){
     }
 }
 
+void load_column(FILE *img, float *arr, long M, long N){
+    for(long y = 0; y < M*N; ++y){
+        if(fscanf(img, "%f", &arr[M*(y%N) + y/N]) != 1){
+            fprintf(stderr, "Error while reading\n");
+            exit(-2);
+        }
+    }
+}
+
 void load_file(char *filename, float **r_arr, float **g_arr, float **b_arr, long *M, long *N){
     FILE *img = fopen(filename, "r");
     fscanf(img, "%li %li", M, N);
@@ -29,9 +38,9 @@ void load_file(char *filename, float **r_arr, float **g_arr, float **b_arr, long
     *g_arr = (float *)malloc(sizeof(float) * (*M)*(*N));
     *b_arr = (float *)malloc(sizeof(float) * (*M)*(*N));
 
-    load_row(img, *r_arr, *M, *N);
-    load_row(img, *g_arr, *M, *N);
-    load_row(img, *b_arr, *M, *N);
+    load_column(img, *r_arr, *M, *N);
+    load_column(img, *g_arr, *M, *N);
+    load_column(img, *b_arr, *M, *N);
 
     fclose(img);
 }
@@ -40,37 +49,59 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
     FILE *out_file = fopen(outname, "w");
     fprintf(out_file, "%li %li\n", M, N);
 
+    for(long y = 0; y < M*N; ++y){
+        if(y == 0){
+            fprintf(out_file, "%f", r_arr[0]);
+        }
+        else{
+            fprintf(out_file, " %f", r_arr[M*(y%N) + y/N]);   
+        }
+    }
+    fprintf(out_file, "\n");
 
+    for(long y = 0; y < M*N; ++y){
+        if(y == 0){
+            fprintf(out_file, "%f", g_arr[0]);
+        }
+        else{
+            fprintf(out_file, " %f", g_arr[M*(y%N) + y/N]);   
+        }
+    }
+    fprintf(out_file, "\n");
+
+    for(long y = 0; y < M*N; ++y){
+        if(y == 0){
+            fprintf(out_file, "%f", b_arr[0]);
+        }
+        else{
+            fprintf(out_file, " %f", b_arr[M*(y%N) + y/N]);   
+        }
+    }
+    fprintf(out_file, "\n");
 
     for(long i = 0; i < N; ++i){
         for(long j = 0; j < M; ++j){
-            if(M*N-1 == (i+1)*(j+1)-1){
-                break;
+            if(i == 0 && j == 0){
+                fprintf(out_file, "%f", g_arr[0]);
             }
-            fprintf(out_file, "%f ", r_arr[j*N + i]);
+            else{
+                fprintf(out_file, " %f", g_arr[j*N + i]);   
+            }
         }
     }
-    fprintf(out_file, "%f\n", r_arr[M*N-1]);
+    fprintf(out_file, "\n");
 
     for(long i = 0; i < N; ++i){
         for(long j = 0; j < M; ++j){
-            if(M*N-1 == (i+1)*(j+1)-1){
-                break;
+            if(i == 0 && j == 0){
+                fprintf(out_file, "%f", b_arr[0]);
             }
-            fprintf(out_file, "%f ", g_arr[j*N + i]);
+            else{
+                fprintf(out_file, " %f", b_arr[j*N + i]);   
+            }
         }
     }
-    fprintf(out_file, "%f\n", g_arr[M*N-1]);
-
-    for(long i = 0; i < N; ++i){
-        for(long j = 0; j < M; ++j){
-            if(M*N-1 == (i+1)*(j+1)-1){
-                break;
-            }
-            fprintf(out_file, "%f ", b_arr[j*N + i]);
-        }
-    }
-    fprintf(out_file, "%f\n", b_arr[M*N-1]);
+    fprintf(out_file, "\n");
 
     fclose(out_file);
 }
@@ -78,14 +109,12 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
 float *intercalar(const float *arr, long M, long N, long x){
     float *final_img = calloc(M * N, sizeof(float));
 
-    for(long i = 0; i < N/x; ++i){
-        for(long tId = 0; tId < M*x; ++tId){
-            final_img[i*x + tId] = arr[(i+1)*x + tId];
-            final_img[(i+1)*x + tId] = arr[i*x + tId];
+    for(long i = 0; i < M*x; ++i){
+        for(long j = 0; j < N/x/2; ++j){
+            final_img[i + j*M*x*2] = arr[i + M*x + j*M*x*2];
+            final_img[i + M*x + j*M*x*2] = arr[i + j*M*x*2];
         }
     }
-
-
 
     return final_img;
 }
