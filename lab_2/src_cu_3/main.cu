@@ -75,16 +75,11 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
 
 __global__ void intercalar(float *dst_arr, float *src_arr, long M, long N, long x){
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
-    if(tId < N/x/2*M){
-        if(tId < N/x/2*M/2){
-            for(long i = 0; i < x; ++i){
-                dst_arr[tId*(2*x) + i] = src_arr[tId*(2*x) + i + x];
-            }
-        }
-        else{
-            for(long i = 0; i < x; ++i){
-                dst_arr[tId*(2*x) + i + x] = src_arr[tId*(2*x) + i];
-            }
+    if(tId < M*N/x/2){
+        int column = (int)(tId/N);
+        for(long i = 0; i < x; ++i){
+            dst_arr[tId*(2*x) + i + column] = src_arr[tId*(2*x) + i + x + column];
+            dst_arr[tId*(2*x) + i + x + column] = src_arr[tId*(2*x) + i + column];
         }
     }
 }
