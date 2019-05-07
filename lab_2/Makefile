@@ -13,4 +13,4 @@ gpu_3:
 	nvcc src_cu_3/main.cu -o lab2_gpu_3
 
 gpu_4:
-	# nvcc src_cu_3/main.cu -o lab2_gpu_3
+	nvcc src_cu_3/main.cu -o lab2_gpu_3

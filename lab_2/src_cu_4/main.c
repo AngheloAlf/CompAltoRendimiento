@@ -11,17 +11,6 @@ void chk_args(int argc, char **argv){
     }
 }
 
-void load_row(FILE *img, float *arr, long M, long N){
-    for(long i = 0; i < N; ++i){
-        for(long j = 0; j < M; ++j){
-            if(fscanf(img, "%f", &arr[j*N + i]) != 1){
-                fprintf(stderr, "Error while reading\n");
-                exit(-2);
-            }
-        }
-    }
-}
-
 void load_column(FILE *img, float *arr, long M, long N){
     for(long y = 0; y < M*N; ++y){
         if(fscanf(img, "%f", &arr[M*(y%N) + y/N]) != 1){
@@ -78,31 +67,7 @@ void write_file(char *outname, long M, long N, float *r_arr, float *g_arr, float
         }
     }
     fprintf(out_file, "\n");
-
-    for(long i = 0; i < N; ++i){
-        for(long j = 0; j < M; ++j){
-            if(i == 0 && j == 0){
-                fprintf(out_file, "%f", g_arr[0]);
-            }
-            else{
-                fprintf(out_file, " %f", g_arr[j*N + i]);   
-            }
-        }
-    }
-    fprintf(out_file, "\n");
-
-    for(long i = 0; i < N; ++i){
-        for(long j = 0; j < M; ++j){
-            if(i == 0 && j == 0){
-                fprintf(out_file, "%f", b_arr[0]);
-            }
-            else{
-                fprintf(out_file, " %f", b_arr[j*N + i]);   
-            }
-        }
-    }
-    fprintf(out_file, "\n");
-
+    
     fclose(out_file);
 }
 
