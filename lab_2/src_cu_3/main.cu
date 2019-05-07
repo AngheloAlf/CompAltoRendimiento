@@ -77,9 +77,15 @@ __global__ void intercalar(float *dst_arr, float *src_arr, long M, long N, long 
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if(tId < M*N/x/2){
         int column = (int)(tId/N);
-        for(long i = 0; i < x; ++i){
-            dst_arr[tId*(2*x) + i + column] = src_arr[tId*(2*x) + i + x + column];
-            dst_arr[tId*(2*x) + i + x + column] = src_arr[tId*(2*x) + i + column];
+        if(tId < (M*N/x/2)/2){
+            for(long i = 0; i < x; ++i){
+                dst_arr[tId*(2*x) + i + column] = src_arr[tId*(2*x) + i + x + column];
+            }
+        }
+        else{
+            for(long i = 0; i < x; ++i){
+                dst_arr[tId*(2*x) + i + x + column] = src_arr[tId*(2*x) + i + column];
+            }
         }
     }
 }
