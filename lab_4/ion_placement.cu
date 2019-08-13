@@ -49,9 +49,7 @@ __global__ void update_Qs(float * dev_Q, point * dev_Ions, int iter){
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     int x = tId%GRID_SIZE;
     int y = tId/GRID_SIZE;
-    for(int i = 0; i<INITIAL_IONS+iter; i++){
-        dev_Q[tId] += 1 / distance((float)x, (float)(y), dev_Ions[i].x, dev_Ions[i].y);
-    }
+    dev_Q[tId] += 1 / distance((float)x, (float)(y), dev_Ions[INITIAL_IONS + iter].x, dev_Ions[INITIAL_IONS + iter].y);
 }
 
 __global__ void set_Qs(float * dev_Q, point * dev_Ions){
