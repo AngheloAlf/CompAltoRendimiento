@@ -7,15 +7,16 @@
 #define MAX_IONS 6000
 #define THREADS_PER_BLOCK 512
 
-typedef struct point point;
+typedef struct Ions Ions;
 
-point Ions[MAX_IONS];
+struct Ions{
+    float xs[MAX_IONS];
+    float ys[MAX_IONS];
+};
+
 float Q[GRID_SIZE*GRID_SIZE];
 
-
-struct point{
-    float x,y;
-};
+Ions * hst_Ions = (Ions*)malloc(sizeof(Ions));
 
 float uniform_rand(){
     return GRID_SIZE*((float) rand() / (RAND_MAX));
@@ -29,15 +30,14 @@ void configSeed(){
 
 void populateIons(){
     for(int i = 0; i<INITIAL_IONS; i++){
-        Ions[i] = *(point*)malloc(sizeof(point));
-        Ions[i].x = uniform_rand();
-        Ions[i].y = uniform_rand();
+        hst_Ions->xs[i] = uniform_rand();
+        hst_Ions->ys[i] = uniform_rand();
     }
 }
 
-void print_first_5(point Ions[]){
+void print_first_5(){
     for(int i = 0; i<5; i++){
-        printf("(%f,%f)\n", Ions[i].x, Ions[i].y);
+        printf("(%f,%f)\n", hst_Ions->xs[i], hst_Ions->ys[i]);
     }
 }
 
@@ -45,21 +45,21 @@ __device__ float distance(float p_1x, float p_1y, float p_2x, float p_2y){
     return sqrtf(powf(p_1x - p_2x, 2) + powf(p_1y - p_2y,2));
 }
 
-__global__ void update_Qs(float * dev_Q, point * dev_Ions, int iter){
+__global__ void update_Qs(float * dev_Q, Ions * dev_Ions, int iter){
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     int x = tId%GRID_SIZE;
     int y = tId/GRID_SIZE;
-    dev_Q[tId] += 1 / distance((float)x, (float)(y), dev_Ions[INITIAL_IONS + iter].x, dev_Ions[INITIAL_IONS + iter].y);
+    dev_Q[tId] += 1 / distance((float)x, (float)(y), dev_Ions->xs[INITIAL_IONS + iter], dev_Ions->ys[INITIAL_IONS + iter]);
 }
 
-__global__ void set_Qs(float * dev_Q, point * dev_Ions){
+__global__ void set_Qs(float * dev_Q, Ions * dev_Ions){
         int tId = threadIdx.x + blockIdx.x * blockDim.x;
         if(tId < GRID_SIZE*GRID_SIZE){
             int x = tId%GRID_SIZE;
             int y = tId/GRID_SIZE;
             float q = 0;
             for(int i = 0; i<INITIAL_IONS; i++){
-                q += 1 / distance((float)x, (float)y, dev_Ions[i].x, dev_Ions[i].y);
+                q += 1 / distance((float)x, (float)y, dev_Ions->xs[i], dev_Ions->ys[i]);
             }
             dev_Q[tId] = q;      
         }
@@ -67,7 +67,7 @@ __global__ void set_Qs(float * dev_Q, point * dev_Ions){
 
 int is_in_Ions(int limit, int pos){
     for(int i = INITIAL_IONS; i<INITIAL_IONS + limit; i++){
-        if((int)Ions[i].x + (int)Ions[i].y * GRID_SIZE == pos){
+        if((int)hst_Ions->xs[i] + (int)hst_Ions->ys[i] * GRID_SIZE == pos){
             return 1;
         }
     }
@@ -77,14 +77,13 @@ int is_in_Ions(int limit, int pos){
 int main(){
 
     float *dev_Q;
-    point *dev_Ions;
+    Ions *dev_Ions;
     configSeed();
     populateIons();
-    cudaMalloc(&dev_Ions, MAX_IONS*sizeof(point));
+    cudaMalloc(&dev_Ions, sizeof(Ions));
     cudaMalloc(&dev_Q, GRID_SIZE*GRID_SIZE * sizeof(float));
-    //La chicha con el kernel
     for(int i=0; i<MAX_IONS-INITIAL_IONS; i++){
-        cudaMemcpy(dev_Ions, Ions, MAX_IONS*sizeof(point), cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_Ions, Ions, sizeof(Ions), cudaMemcpyHostToDevice);
         if(i==0){
             set_Qs<<<GRID_SIZE*GRID_SIZE/THREADS_PER_BLOCK, THREADS_PER_BLOCK>>>(dev_Q, dev_Ions);
         }else{
@@ -98,8 +97,8 @@ int main(){
                 int y = n/GRID_SIZE;
                 if(Q[n]<min){
                     min = Q[n];
-                    Ions[INITIAL_IONS+i].x = (float)x;
-                    Ions[INITIAL_IONS+i].y = (float)y;
+                    hst_Ions->xs[INITIAL_IONS+i] = (float)x;
+                    hst_Ions->ys[INITIAL_IONS+i] = (float)y;
                 }
             }
         }
