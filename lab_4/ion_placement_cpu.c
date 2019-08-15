@@ -21,8 +21,10 @@ float uniform_rand(){
     return GRID_SIZE*((float) rand() / (RAND_MAX));
 }
 
-void configSeed(){
-    unsigned seed = (unsigned)time(NULL);
+void configSeed(unsigned seed){
+    if(seed == 0){
+        unsigned seed = (unsigned)time(NULL);
+    }
     srand(seed);
     printf("results for seed %i\n", seed);
 }
@@ -89,13 +91,12 @@ void calculate_Qs(int iter){
                 min[1] = y;
             }
         }
-        printf("(%i,%i)-%f\n", min[0], min[1], q_min);
     }
     else{
         for(int v = 0; v<GRID_SIZE*GRID_SIZE; v++){
-            if(ion_in(v, iter)==0){
-                int x = v%GRID_SIZE;
-                int y = v/GRID_SIZE;
+            int x = v%GRID_SIZE;
+            int y = v/GRID_SIZE;
+            if(Q[x][y] != INFINITY){
                 vertex[0] = x;
                 vertex[1] = y;
                 Q[x][y] += 1 / distance(ionList->point, vertex);
@@ -108,8 +109,10 @@ void calculate_Qs(int iter){
         }
     }
     if(q_min != INFINITY){
+        printf("(%i,%i)-%f\n", min[0], min[1], q_min);
         pushIon(min[0],min[1]);
         ion_population++;
+        Q[min[0]][min[1]] = INFINITY;
     }
 }
 
@@ -120,7 +123,7 @@ void ion_populate(int size){
 }
 
 int main(){
-    configSeed();
+    configSeed(10);
     ion_populate(ion_population);
     for(int i = 0; i<1000; i++){
         calculate_Qs(i);
