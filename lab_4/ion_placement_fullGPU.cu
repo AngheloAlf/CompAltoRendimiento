@@ -3,8 +3,8 @@
 
 #define SIZE_MALLA 1024//8192
 #define BLOCK_SIZE 1024
-#define INITIAL_IONS 100
-#define MAX_IONS 200
+#define INITIAL_IONS 1000
+#define MAX_IONS 2000
 
 __constant__ float dev_ini_ions_xs[INITIAL_IONS];
 __constant__ float dev_ini_ions_ys[INITIAL_IONS];
@@ -32,6 +32,18 @@ __device__ float distance(float p1x, float p1y, float p2x, float p2y){
     return sqrtf(powf(p1x-p2x, 2) + powf(p1y-p2y, 2));
 }
 
+__device__ void set_partials(float* mins, int* position, int tId){
+    for(unsigned int s = blockDim.x/2; s>0; s>>=1){
+        if(tId < s){
+            if(mins[tId] > mins[tId+s]){
+                mins[tId] = mins[tId+s];
+                position[tId] = position[tId+s];
+            }
+        }
+        __syncthreads();
+    }
+}
+
 __global__ void set_Qs(float* dev_Q, float* partial_min, int* partial_min_pos){
     int uThId = threadIdx.x + blockDim.x * blockIdx.x;
     int tId = threadIdx.x;
@@ -53,15 +65,7 @@ __global__ void set_Qs(float* dev_Q, float* partial_min, int* partial_min_pos){
     mins[tId] = q;
     position[tId] = uThId;
     __syncthreads();
-    for(unsigned int s = blockDim.x/2; s>0; s>>=1){
-        if(tId < s){
-            if(mins[tId] > mins[tId+s]){
-                mins[tId] = mins[tId+s];
-                position[tId] = position[tId+s];
-            }
-        }
-        __syncthreads();
-    }
+    set_partials(mins, position, tId);
     if(tId == 0){
         partial_min[blockIdx.x] = mins[0];
         partial_min_pos[blockIdx.x] = position[0];
@@ -69,7 +73,6 @@ __global__ void set_Qs(float* dev_Q, float* partial_min, int* partial_min_pos){
 }
 
 __global__ void set_new_Ion(int new_ionIdx, float* dev_Q , float* new_ions_xs, float* new_ions_ys, float* partial_min, int* partial_min_pos){
-    //int uThId = threadIdx.x + blockIdx.x * blockDim.x;
     int tId = threadIdx.x;
     extern __shared__ float sdata[];
     float* mins = sdata;
@@ -77,15 +80,7 @@ __global__ void set_new_Ion(int new_ionIdx, float* dev_Q , float* new_ions_xs, f
     mins[tId] = partial_min[tId];
     position[tId] = partial_min_pos[tId];
     __syncthreads();
-    for(unsigned int s = blockDim.x/2; s>0; s>>=1){
-        if(tId < s){
-            if(mins[tId] > mins[tId+s]){
-                mins[tId] = mins[tId+s];
-                position[tId] = position[tId+s];
-            }
-        }
-        __syncthreads();
-    }
+    set_partials(mins, position, tId);
     if(tId == 0){
         new_ions_xs[new_ionIdx] = (float)(position[0]%SIZE_MALLA);
         new_ions_ys[new_ionIdx] = (float)(position[0]/SIZE_MALLA);
@@ -109,15 +104,7 @@ __global__ void update_Qs(int new_ionIdx, float * dev_Q, float* new_ions_xs, flo
     mins[tId] = dev_Q[uThId];
     position[tId] = uThId;
     __syncthreads();
-    for(unsigned int s = blockDim.x/2; s>0; s>>=1){
-        if(tId < s){
-            if(mins[tId] > mins[tId+s]){
-                mins[tId] = mins[tId+s];
-                position[tId] = position[tId+s];
-            }
-        }
-        __syncthreads();
-    }
+    set_partials(mins, position, tId);
     if(tId == 0){
         partial_min[blockIdx.x] = mins[0];
         partial_min_pos[blockIdx.x] = position[0];
@@ -154,6 +141,7 @@ int ion_placement(){
     if(inf != 0) return inf;
     inf = cudaMemcpy(hst_ions_placed_ys, new_ions_ys, (MAX_IONS-INITIAL_IONS)*sizeof(float), cudaMemcpyDeviceToHost);
     if(inf != 0) return inf;
+
     for(int i = 0; i<MAX_IONS-INITIAL_IONS; i++){
         printf("ION %i: (%f,%f)\n", i, hst_ions_placed_xs[i], hst_ions_placed_ys[i]);
     }
