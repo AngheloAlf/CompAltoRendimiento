@@ -83,8 +83,8 @@ __global__ void cudaMinPos(float * partials, int * partials_pos, float * min, in
         __syncthreads();
     }
     if(tId == 0){
-        min[0] = numbers[0];
-        min_pos[0] = position[0];
+        *min = numbers[0];
+        *min_pos = position[0];
     }
 }
 
@@ -95,11 +95,11 @@ void print(float * ptr, int n){
 }
 
 void searchMin(float * Q){
-    float * min = (float*)malloc(sizeof(float));
-    float * dev_Q;
-    float * dev_partials;
-    float * dev_min;
-    float * partials = (float*)malloc((SIZE*SIZE/BLOCK_SIZE)*sizeof(float));
+    float *min = (float*)malloc(sizeof(float));
+    float *dev_Q;
+    float *dev_partials;
+    float *dev_min;
+    float *partials = (float*)malloc((SIZE*SIZE/BLOCK_SIZE)*sizeof(float));
     cudaMalloc(&dev_Q, SIZE*SIZE*sizeof(float));
     cudaMalloc(&dev_partials, (SIZE*SIZE/BLOCK_SIZE)*sizeof(float));
     cudaMalloc(&dev_min, sizeof(float));
@@ -118,32 +118,34 @@ void searchMin(float * Q){
     free(min);
 }
 
-int searchMinPos(float * dev_Q){
-    float * dev_partials_ans;
-    int * dev_partials_pos;
-    float * dev_min;
-    int * dev_min_pos;
-    float * min = (float*)malloc(sizeof(float));
-    int * pos = (int*)malloc(sizeof(int));
+int searchMinPos(float *dev_Q){
+    float *dev_partials_ans;
+    int *dev_partials_pos;
+    float *dev_min;
+    int *dev_min_pos;
+    // float min;
+    int pos;
     int sMemSize = BLOCK_SIZE*(sizeof(float) + sizeof(int));
     cudaMalloc(&dev_partials_ans, (SIZE*SIZE/BLOCK_SIZE)*sizeof(float));
     cudaMalloc(&dev_partials_pos, (SIZE*SIZE/BLOCK_SIZE)*sizeof(int));
     cudaMalloc(&dev_min, sizeof(float));
     cudaMalloc(&dev_min_pos, sizeof(int));
+    
     cudaPartialsMinPos<<<(SIZE*SIZE)/BLOCK_SIZE, BLOCK_SIZE, sMemSize>>>(dev_Q, dev_partials_ans, dev_partials_pos);
     cudaMinPos<<<1, BLOCK_SIZE, sMemSize>>>(dev_partials_ans, dev_partials_pos, dev_min, dev_min_pos);
-    cudaMemcpy(min, dev_min, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(pos, dev_min_pos, sizeof(int), cudaMemcpyDeviceToHost);
-    cudaFree(dev_Q);
+
+    // cudaMemcpy(&min, dev_min, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&pos, dev_min_pos, sizeof(int), cudaMemcpyDeviceToHost);
+
     cudaFree(dev_partials_ans);
     cudaFree(dev_partials_pos);
     cudaFree(dev_min);
     cudaFree(dev_min_pos);
-    int resp = *pos;
-    free(min);
-    free(pos);
-    return resp;
+
+    return pos;
 }
+
+/*
 int main(){
     float * Q = (float*)malloc(SIZE*SIZE*sizeof(float));
     float * dev_Q;
@@ -180,3 +182,4 @@ int main(){
     free(Q);
     return 0;
 }
+*/
