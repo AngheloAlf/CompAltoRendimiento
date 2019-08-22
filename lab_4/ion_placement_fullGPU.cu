@@ -3,8 +3,8 @@
 
 #define SIZE_MALLA 8192//1024
 #define BLOCK_SIZE 256//1024
-#define INITIAL_IONS 200
-#define MAX_IONS 1200
+#define INITIAL_IONS 100
+#define MAX_IONS 1100
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
 #define PBWIDTH 60
 
@@ -277,7 +277,27 @@ int ion_placement(float r){
 
 int main(){
     configSeed(1566440079);//10
-    int error = ion_placement(100);
-    printf("\ncuda code: %i\n", error);
+    cudaEvent_t ct1, ct2, ctr1, ctr2;
+    float dt1, dt2;
+    cudaEventCreate(&ct1);
+    cudaEventCreate(&ct2);
+    cudaEventCreate(&ctr1);
+    cudaEventCreate(&ctr2);
+    printf("radio = INFINITY\n");
+    cudaEventRecord(ct1);
+    int error1 = ion_placement(INFINITY);
+    cudaEventRecord(ct2);
+    cudaEventSynchronize(ct2);
+    cudaEventElapsedTime(&dt1, ct1, ct2);
+    //printf("\ncuda code: %i\n", error);
+    //printf("Execution time all ions: %f[ms]", dt1);
+    printf("\nradio = 100\n");
+    cudaEventRecord(ctr1);
+    int error2 = ion_placement(100);
+    cudaEventRecord(ctr2);
+    cudaEventSynchronize(ctr2);
+    cudaEventElapsedTime(&dt2, ctr1, ctr2);
+    printf("\nCUDA CODES:\n\tion_placement(INFINITY): %i \n\tion_placement(100): %i\n", error1, error2);
+    printf("TIMES:\n\tion_placement(INFINITY): %f\n\tion_placement(100): %f\n", dt1, dt2);
     return 0;
 }

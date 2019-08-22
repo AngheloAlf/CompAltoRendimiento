@@ -3,7 +3,7 @@
 #include <time.h>
 #include <math.h>
 
-#define GRID_SIZE 2000
+#define GRID_SIZE 2048
 
 typedef struct Ion Ion;
 
@@ -124,6 +124,8 @@ void ion_populate(int size){
 
 int main(){
     configSeed(10);
+    clock_t start_t, end_t;
+    start_t = clock();
     ion_populate(ion_population);
     for(int i = 0; i<1000; i++){
         calculate_Qs(i);
@@ -133,5 +135,7 @@ int main(){
         printf("(%f,%f)\n", ion->point[0], ion->point[1]);
         ion = ion->next;
     }
+    end_t = clock();
+    printf("Tiempo: %f\n[ms]", 1000.0*(double)(end_t - start_t) / CLOCKS_PER_SEC);
     return 0;
 }
