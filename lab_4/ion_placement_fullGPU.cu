@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define SIZE_MALLA 1024//8192
-#define BLOCK_SIZE 1024
-#define INITIAL_IONS 1000
-#define MAX_IONS 2000
+#define SIZE_MALLA 8192//1024
+#define BLOCK_SIZE 256//1024
+#define INITIAL_IONS 100
+#define MAX_IONS 1100
 
 __constant__ float dev_ini_ions_xs[INITIAL_IONS];
 __constant__ float dev_ini_ions_ys[INITIAL_IONS];
@@ -76,7 +76,7 @@ __global__ void set_new_Ion(int new_ionIdx, float* dev_Q , float* new_ions_xs, f
     int tId = threadIdx.x;
     extern __shared__ float sdata[];
     float* mins = sdata;
-    int* position = (int*)&sdata[BLOCK_SIZE];
+    int* position = (int*)&sdata[blockDim.x];
     mins[tId] = partial_min[tId];
     position[tId] = partial_min_pos[tId];
     __syncthreads();
@@ -88,7 +88,23 @@ __global__ void set_new_Ion(int new_ionIdx, float* dev_Q , float* new_ions_xs, f
     }
 }
 
-__global__ void update_Qs(int new_ionIdx, float * dev_Q, float* new_ions_xs, float* new_ions_ys, float* partial_min, int* partial_min_pos){
+__global__ void reduction(float* partial_min, int* partial_min_pos){
+    int uThId = threadIdx.x + blockDim.x*blockIdx.x;
+    int tId = threadIdx.x;
+    extern __shared__ float sdata[];
+    float* mins = sdata;
+    int* position = (int*)&sdata[blockDim.x];
+    mins[tId] = partial_min[uThId];
+    position[tId] = partial_min_pos[uThId];
+    __syncthreads();
+    set_partials(mins, position, tId);
+    if(tId == 0){
+        partial_min[blockIdx.x] = mins[0];
+        partial_min_pos[blockIdx.x] = position[0];
+    }
+}
+
+__global__ void update_Qs(int new_ionIdx, float* dev_Q, float* new_ions_xs, float* new_ions_ys, float* partial_min, int* partial_min_pos){
     int uThId = threadIdx.x + blockDim.x * blockIdx.x;
     int tId = threadIdx.x;
     extern __shared__ float sdata[];
@@ -111,6 +127,22 @@ __global__ void update_Qs(int new_ionIdx, float * dev_Q, float* new_ions_xs, flo
     }
 }
 
+void setIon(int i, float* dev_Q, float* new_ions_xs, float* new_ions_ys, float* partial_min, int* partial_min_pos){
+    int size;
+    //printf("Ion %i\n", i);
+    for(size = SIZE_MALLA*SIZE_MALLA/BLOCK_SIZE; size>BLOCK_SIZE; size/=BLOCK_SIZE){
+        //printf("size = %i\n", size);
+        reduction<<<size/BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE*(sizeof(float) + sizeof(int))>>>(partial_min, partial_min_pos);
+        int inf = cudaDeviceSynchronize();
+        if(inf != 0){printf("fail in reduction, cuda code: %i\n", inf);}
+    }
+    //printf("size = %i\n", size);
+    int sMemSize = size*(sizeof(float) + sizeof(int));
+    set_new_Ion<<<1, size, sMemSize>>>(i, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
+    int inf = cudaDeviceSynchronize();
+    if(inf != 0){printf("fail in set_new_ion, cuda code: %i\n", inf);}
+}
+
 int ion_placement(){
     float* hst_ini_ions_xs = (float*)malloc(INITIAL_IONS*sizeof(float));
     float* hst_ini_ions_ys = (float*)malloc(INITIAL_IONS*sizeof(float));
@@ -131,13 +163,17 @@ int ion_placement(){
     cudaMalloc(&new_ions_ys,(MAX_IONS - INITIAL_IONS)*sizeof(float));
     int sMemSize = BLOCK_SIZE*(sizeof(float) + sizeof(int));
     set_Qs<<<SIZE_MALLA*SIZE_MALLA/BLOCK_SIZE, BLOCK_SIZE, sMemSize>>>(dev_Q, partial_min, partial_min_pos);
-    set_new_Ion<<<1, BLOCK_SIZE, sMemSize>>>(0, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
+    int inf = cudaDeviceSynchronize();
+    if(inf != 0) {printf("fail0\n"); return inf;}
+    setIon(0, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
     for(int i = 1; i< MAX_IONS-INITIAL_IONS; i++){
         update_Qs<<<SIZE_MALLA*SIZE_MALLA/BLOCK_SIZE, BLOCK_SIZE, sMemSize>>>(i-1, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
-        set_new_Ion<<<1, BLOCK_SIZE, sMemSize>>>(i, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
+        inf = cudaDeviceSynchronize();
+        if(inf != 0) {printf("fail1\n"); return inf;}
+        setIon(i, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
     }
 
-    int inf = cudaMemcpy(hst_ions_placed_xs, new_ions_xs, (MAX_IONS-INITIAL_IONS)*sizeof(float), cudaMemcpyDeviceToHost);
+    inf = cudaMemcpy(hst_ions_placed_xs, new_ions_xs, (MAX_IONS-INITIAL_IONS)*sizeof(float), cudaMemcpyDeviceToHost);
     if(inf != 0) return inf;
     inf = cudaMemcpy(hst_ions_placed_ys, new_ions_ys, (MAX_IONS-INITIAL_IONS)*sizeof(float), cudaMemcpyDeviceToHost);
     if(inf != 0) return inf;
