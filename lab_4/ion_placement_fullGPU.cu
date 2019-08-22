@@ -2,9 +2,11 @@
 #include <stdlib.h>
 
 #define SIZE_MALLA 8192//1024
-#define BLOCK_SIZE 256//1024
+#define BLOCK_SIZE 128//1024
 #define INITIAL_IONS 100
 #define MAX_IONS 1100
+#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
+#define PBWIDTH 60
 
 __constant__ float dev_ini_ions_xs[INITIAL_IONS];
 __constant__ float dev_ini_ions_ys[INITIAL_IONS];
@@ -143,6 +145,16 @@ void setIon(int i, float* dev_Q, float* new_ions_xs, float* new_ions_ys, float* 
     if(inf != 0){printf("fail in set_new_ion, cuda code: %i\n", inf);}
 }
 
+
+void printProgress (double percentage)
+{
+    int val = (int) (percentage * 100);
+    int lpad = (int) (percentage * PBWIDTH);
+    int rpad = PBWIDTH - lpad;
+    printf ("\r%3d%% [%.*s%*s]", val, lpad, PBSTR, rpad, "");
+    fflush (stdout);
+}
+
 int ion_placement(){
     float* hst_ini_ions_xs = (float*)malloc(INITIAL_IONS*sizeof(float));
     float* hst_ini_ions_ys = (float*)malloc(INITIAL_IONS*sizeof(float));
@@ -163,14 +175,17 @@ int ion_placement(){
     cudaMalloc(&new_ions_ys,(MAX_IONS - INITIAL_IONS)*sizeof(float));
     int sMemSize = BLOCK_SIZE*(sizeof(float) + sizeof(int));
     set_Qs<<<SIZE_MALLA*SIZE_MALLA/BLOCK_SIZE, BLOCK_SIZE, sMemSize>>>(dev_Q, partial_min, partial_min_pos);
+    printf("Working in set_Qs\n");
     int inf = cudaDeviceSynchronize();
     if(inf != 0) {printf("fail0\n"); return inf;}
     setIon(0, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
+    printf("Updating Qs\n");
     for(int i = 1; i< MAX_IONS-INITIAL_IONS; i++){
         update_Qs<<<SIZE_MALLA*SIZE_MALLA/BLOCK_SIZE, BLOCK_SIZE, sMemSize>>>(i-1, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
         inf = cudaDeviceSynchronize();
         if(inf != 0) {printf("fail1\n"); return inf;}
         setIon(i, dev_Q, new_ions_xs, new_ions_ys, partial_min, partial_min_pos);
+        printProgress((double)(i+1)/(MAX_IONS-INITIAL_IONS));
     }
 
     inf = cudaMemcpy(hst_ions_placed_xs, new_ions_xs, (MAX_IONS-INITIAL_IONS)*sizeof(float), cudaMemcpyDeviceToHost);
@@ -179,7 +194,7 @@ int ion_placement(){
     if(inf != 0) return inf;
 
     for(int i = 0; i<MAX_IONS-INITIAL_IONS; i++){
-        printf("ION %i: (%f,%f)\n", i, hst_ions_placed_xs[i], hst_ions_placed_ys[i]);
+        printf("\nION %i: (%f,%f)", i, hst_ions_placed_xs[i], hst_ions_placed_ys[i]);
     }
 
     cudaFree(dev_Q);
@@ -197,8 +212,6 @@ int ion_placement(){
 int main(){
     configSeed(10);
     int error = ion_placement();
-    printf("cuda code: %i\n", error);
-    int dist = 2;
-    printf("1/dist = %f\n", (dist==0)? INFINITY : (float)(2/dist));
+    printf("\ncuda code: %i\n", error);
     return 0;
 }
