@@ -1,15 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define SIZE_MALLA 8192//1024
-#define BLOCK_SIZE 256//1024
-#define INITIAL_IONS 5000
-#define MAX_IONS 6000
-#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
-#define PBWIDTH 60
-
-__constant__ float dev_ini_ions_xs[INITIAL_IONS];
-__constant__ float dev_ini_ions_ys[INITIAL_IONS];
+#include "launch_config.cuh"
+#include "reduction.cuh"
+#include "kernels.cuh"
 
 float uniform_rand(){
     return SIZE_MALLA*((float) rand() / (RAND_MAX));
@@ -27,144 +21,6 @@ void populate(float* ions_xs, float* ions_ys){
     for(int i = 0; i<INITIAL_IONS; i++){
         ions_xs[i]=uniform_rand();
         ions_ys[i]=uniform_rand();
-    }
-}
-
-__device__ float distance(float p1x, float p1y, float p2x, float p2y){
-    return sqrtf(powf(p1x-p2x, 2) + powf(p1y-p2y, 2));
-}
-
-__device__ void set_partials(float* mins, int* position, int tId){
-    for(unsigned int s = blockDim.x/2; s>0; s>>=1){
-        if(tId < s){
-            if(mins[tId] > mins[tId+s]){
-                mins[tId] = mins[tId+s];
-                position[tId] = position[tId+s];
-            }
-        }
-        __syncthreads();
-    }
-}
-
-__global__ void set_Qs(float* dev_Q){
-    int uThId = threadIdx.x + blockDim.x * blockIdx.x;
-    float q = 0;
-    for(int i = 0; i<INITIAL_IONS; i++){
-        float dist = distance((float)(uThId%SIZE_MALLA), (float)(uThId/SIZE_MALLA), dev_ini_ions_xs[i], dev_ini_ions_ys[i]);
-        if(dist == 0){
-            q=INFINITY;
-            break;
-        }
-        else{
-            q+= 1/dist;
-        }
-    }
-    dev_Q[uThId] = q;
-}
-
-__global__ void update_Qs_by_chunk(float* dev_Q, int i, int chunk_size){
-    int uThId = threadIdx.x + blockDim.x * blockIdx.x;
-    float q = 0;
-    for(int n = i*chunk_size; n<(i+1)*chunk_size; n++){
-        float dist = distance((float)(uThId%SIZE_MALLA), (float)(uThId/SIZE_MALLA), dev_ini_ions_xs[n], dev_ini_ions_ys[n]);
-        if(dist == 0){
-            q=INFINITY;
-            break;
-        }
-        else{
-            q += 1/dist;
-        }
-    }
-    dev_Q[uThId]+= q;
-}
-
-__global__ void set_Qs_r(float* dev_Q, float r){
-    int uThId = threadIdx.x + blockDim.x * blockIdx.x;
-    float q = 0;
-    for(int i = 0; i<INITIAL_IONS; i++){
-        float dist = distance((float)(uThId%SIZE_MALLA), (float)(uThId/SIZE_MALLA), dev_ini_ions_xs[i], dev_ini_ions_ys[i]);
-        if(dist<r){
-            if(dist == 0){
-                q=INFINITY;
-                break;
-            }
-            else{
-                q+= 1/dist;
-            }
-        }
-    }
-    dev_Q[uThId] = q;
-}
-
-__global__ void set_new_Ion(int new_ionIdx, float* dev_Q , float* new_ions_xs, float* new_ions_ys, float* partial_min, int* partial_min_pos){
-    int tId = threadIdx.x;
-    extern __shared__ float sdata[];
-    float* mins = sdata;
-    int* position = (int*)&sdata[blockDim.x];
-    mins[tId] = partial_min[tId];
-    position[tId] = partial_min_pos[tId];
-    __syncthreads();
-    set_partials(mins, position, tId);
-    if(tId == 0){
-        new_ions_xs[new_ionIdx] = (float)(position[0]%SIZE_MALLA);
-        new_ions_ys[new_ionIdx] = (float)(position[0]/SIZE_MALLA);
-        dev_Q[position[0]] = INFINITY;
-    }
-}
-
-__global__ void partial_reduction(float* partial_min, int* partial_min_pos){
-    int uThId = threadIdx.x + blockDim.x*blockIdx.x;
-    int tId = threadIdx.x;
-    extern __shared__ float sdata[];
-    float* mins = sdata;
-    int* position = (int*)&sdata[blockDim.x];
-    mins[tId] = partial_min[uThId];
-    position[tId] = partial_min_pos[uThId];
-    __syncthreads();
-    set_partials(mins, position, tId);
-    if(tId == 0){
-        partial_min[blockIdx.x] = mins[0];
-        partial_min_pos[blockIdx.x] = position[0];
-    }
-}
-
-__global__ void Q_reduction(float* dev_Q, float* partial_min, int* partial_min_pos){
-    int uThId = threadIdx.x + blockDim.x*blockIdx.x;
-    int tId = threadIdx.x;
-    extern __shared__ float sdata[];
-    float* mins = sdata;
-    int* position = (int*)&sdata[blockDim.x];
-    mins[tId] = dev_Q[uThId];
-    position[tId] = uThId;
-    __syncthreads();
-    set_partials(mins, position, tId);
-    if(tId == 0){
-        partial_min[blockIdx.x] = mins[0];
-        partial_min_pos[blockIdx.x] = position[0];
-    }
-}
-
-__global__ void update_Qs(int new_ionIdx, float* dev_Q, float* new_ions_xs, float* new_ions_ys){
-    int uThId = threadIdx.x + blockDim.x * blockIdx.x;
-    float dist = distance((float)(uThId%SIZE_MALLA), (float)(uThId/SIZE_MALLA), new_ions_xs[new_ionIdx], new_ions_ys[new_ionIdx]);
-    if(dist == 0){
-        dev_Q[uThId]=INFINITY;
-    }
-    else{
-        dev_Q[uThId] += 1/dist;
-    }
-}
-
-__global__ void update_Qs_r(int new_ionIdx, float* dev_Q, float* new_ions_xs, float* new_ions_ys, float r){
-    int uThId = threadIdx.x + blockDim.x * blockIdx.x;
-    float dist = distance((float)(uThId%SIZE_MALLA), (float)(uThId/SIZE_MALLA), new_ions_xs[new_ionIdx], new_ions_ys[new_ionIdx]);
-    if(dist<r){
-        if(dist == 0){
-            dev_Q[uThId]=INFINITY;
-        }
-        else{
-            dev_Q[uThId] += 1/dist;
-        }
     }
 }
 
