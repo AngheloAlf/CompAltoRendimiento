@@ -36,6 +36,25 @@ __global__ void update_Qs_by_chunk(float* dev_Q, int i, int chunk_size){
     dev_Q[uThId]+= q;
 }
 
+__global__ void update_Qs_by_chunk_r(float* dev_Q, int i, int chunk_size, float r){
+    int uThId = threadIdx.x + blockDim.x * blockIdx.x;
+    float q = 0;
+    for(int n = i*chunk_size; n<(i+1)*chunk_size; n++){
+        float dist = distance((float)(uThId%SIZE_MALLA), (float)(uThId/SIZE_MALLA), dev_ini_ions_xs[n], dev_ini_ions_ys[n]);
+        if(dist < r){
+            if(dist == 0){
+                q=INFINITY;
+                break;
+            }
+            else{
+                q += 1/dist;
+            }
+        }
+    }
+    dev_Q[uThId]+= q;
+}
+
+
 __global__ void set_Qs_r(float* dev_Q, float r){
     int uThId = threadIdx.x + blockDim.x * blockIdx.x;
     float q = 0;
